@@ -5,21 +5,137 @@ output:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
 
+Load the data into R
+```{r echo=TRUE}
+library(dplyr)
+library(lubridate)
 
+data <- read.csv("activity.csv", header = TRUE, stringsAsFactors = FALSE)
+str(data)
+
+dataset <- tbl_df(data)
+
+## convert date
+dataset <- dataset %>% mutate(date=ymd(date))
+summary(dataset)
+```
 
 ## What is mean total number of steps taken per day?
 
+```{r echo=TRUE}
+per_day <-  dataset %>% na.omit %>% group_by(date)
 
+summary <- per_day %>% summarise(sum(steps))
+names(summary) <- c("day", "total_steps") 
+
+print(summary) 
+```
+
+```{r echo=TRUE}
+library(ggplot2)
+
+qplot(total_steps, data = summary, geom = "histogram", bins = 40, 
+      main = "The total number of steps taken each day")
+
+mean_total_steps <- mean(summary$total_steps)
+print(mean_total_steps)
+
+median_total_steps <- median(summary$total_steps)
+print(median_total_steps)
+```
+
+Mean total number of steps taken per day: **`r as.integer(mean_total_steps)`**
+Median total number of steps taken per day: **`r as.integer(median_total_steps)`**
 
 ## What is the average daily activity pattern?
+
+```{r echo=TRUE}
+per_interval <- dataset %>% na.omit %>% group_by(interval)
+
+summary2 <- per_interval %>% summarise(mean(steps))
+names(summary2) <- c("interval", "mean_steps") 
+str(summary2)
+
+plot(summary2$interval, summary2$mean_steps, type = "l" ,
+     xlab="5-minute interval", ylab="Average number of steps taken",
+     main="Daily activity pattern")
+
+
+## Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+print( summary2 %>% filter(mean_steps == max(mean_steps)) )
+```
 
 
 
 ## Imputing missing values
 
+Number of missing values in *steps* column: `r sum(is.na(dataset$steps))`  
+Number of missing values in *date* column: `r sum(is.na(dataset$date))`  
+Number of missing values in *interval* column: `r sum(is.na(dataset$interval))`  
+
+
+
+```{r echo=TRUE}
+## average number of steps taken every day
+mean_total_steps <- mean(summary$total_steps)
+print(mean_total_steps)
+```
+
+**Let's replace missing values in *steps* column with an average number of steps taken every day divided by the number of time periods.**
+
+```{r echo=TRUE}
+repl <- as.integer(mean_total_steps / length(unique(dataset$interval)))
+fixed_dataset <- mutate(dataset, steps = ifelse(is.na(steps), repl,  steps))
+str(fixed_dataset)
+```
+
+Number of missing values in *steps* column: `r sum(is.na(fixed_dataset$steps))`  
+
+```{r echo=TRUE}
+per_day <- fixed_dataset %>% group_by(date)
+
+summary3 <- per_day %>% summarise(sum(steps))
+names(summary3) <- c("day", "total_steps") 
+
+print(table(summary3$total_steps))
+qplot(total_steps, data = summary3, geom = "histogram", bins = 40,
+      main = "The total number of steps taken each day")
+
+## Calculate and report the mean and median total number of steps taken per day. Do these values differ from the
+## estimates from the first part of the assignment?
+
+mean_total_steps <- mean(summary3$total_steps)
+print(mean_total_steps)
+
+median_total_steps <- median(summary3$total_steps)
+print(median_total_steps)
+```
+
+The mean and median total number of steps taken per day don't significantly differ from the estimates from the first part of the assignment.
+
+Imputing missing data doesn't have any significant impact on the estimates of the total daily number of steps.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r echo=TRUE}
+fixed_dataset <- fixed_dataset %>% mutate(day_type = ifelse(wday(date) == 1 | wday(date) == 7, "weekend", "weekday"))
+str(fixed_dataset)
+
+
+per_interval <- fixed_dataset %>% group_by(interval, day_type)
+
+summary4 <- per_interval %>% summarise(mean(steps))
+names(summary4) <- c("interval", "day_type", "mean_steps") 
+str(summary4)
+
+library(lattice)
+
+xyplot(mean_steps ~ interval | day_type, type = "l" ,
+     xlab="5-minute interval", ylab="Average number of steps taken",
+     main="Daily activity pattern", data=summary4)
+
+```
+
